@@ -1,0 +1,1 @@
+- gcloud ai custom-jobs create --region=europe-west1 --display-name=diffusion-spectrograms --worker-pool-spec="machine-type=a2-ultragpu-1g,replica-count=1,executor-image-uri=europe-docker.pkg.dev/vertex-ai/training/pytorch-gpu.1-11:latest,local-package-path=S:\Code\_Uni\GCP-Diffusion-Spectrograms,script=ddpm.py"
