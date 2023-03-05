@@ -1,6 +1,3 @@
-import logging
-import os
-
 import torch
 import torch.nn as nn
 from torch import optim
@@ -8,9 +5,6 @@ from tqdm import tqdm
 
 from modules import UNet
 from utils import *
-
-logging.basicConfig(format="%(asctime)s - %(levelname)s: %(message)s",
-                    level=logging.INFO, datefmt="%I:%M:%S")
 
 
 class Diffusion:
@@ -40,6 +34,7 @@ class Diffusion:
         return torch.randint(low=1, high=self.noise_steps, size=(n,))
 
     def sample(self, model, n):
+        print(f"Sampling {n} new images....")
         model.eval()
         with torch.no_grad():
             x = torch.randn(
@@ -63,27 +58,39 @@ class Diffusion:
 
 
 def train(args):
-    setup_logging(args.name)
     device = args.device
+
+    print("Fetching data")
     dataloader = get_data(args)
 
     start_epoch = 0
-    model = UNet(device=device, img_height=args.image_size[0], img_width=args.image_size[1]).to(device)
-    if os.path.isfile(os.path.join("models", args.name, f"ckpt.pt")):
-        checkpoint = torch.load(os.path.join("models", args.name, f"ckpt.pt"))
-        model.load_state_dict(checkpoint['model_state_dict'])
-        start_epoch = checkpoint['epoch'] + 1
-        print(f"Found checkpoint at epoch {start_epoch}, loading model")
 
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr)
+    model = UNet(
+        device=device, img_height=args.image_size[0], img_width=args.image_size[1])
+
+    model = nn.DataParallel(model)
+
+    model.to(device)
+
+    print(f"Using {torch.cuda.device_count()} GPUs")
+
+    print(
+        f"Created model with {sum([p.numel() for p in model.parameters()])} parameters")
+
+    # if os.path.isfile(os.path.join("models", args.name, f"ckpt.pt")):
+    #     checkpoint = torch.load(os.path.join("models", args.name, f"ckpt.pt"))
+    #     model.load_state_dict(checkpoint['model_state_dict'])
+    #     start_epoch = checkpoint['epoch'] + 1
+    #     print(f"Found checkpoint at epoch {start_epoch}, loading model")
+
+    optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
-    len_dataloader = len(dataloader)
 
     for epoch in range(start_epoch, args.epochs):
-        logging.info(f"Starting epoch {epoch}:")
+        print(f"Starting epoch {epoch}:")
         pbar = tqdm(dataloader)
-        for loop_idx, images in enumerate(pbar):
+        for images in pbar:
             images = images.to(device)
             t = diffusion.sample_timesteps(images.shape[0]).to(device)
             x_t, noise = diffusion.noise_images(images, t)
@@ -96,45 +103,42 @@ def train(args):
 
             pbar.set_postfix(MSE=loss.item())
 
-        logging.info(f"Sampling {5} new images....")
-        for loop_idx in tqdm(range(0, 5)):
-            sampled_image = diffusion.sample(model, n=images.shape[0])
-            save_image(np.squeeze(sampled_image.to('cpu').numpy(), axis=0), os.path.join(
-                "results", args.name, str(epoch)), args.image_size[0], args.image_size[1], loop_idx)
+        sampled_image = diffusion.sample(model, n=images.shape[0])
+
+        samples = sampled_image.to('cpu').numpy()
+
+        for idx, data in enumerate(samples):
+            save_image(np.squeeze(data, axis=0),
+                       args.image_size[0], args.image_size[1], epoch, idx, args.result_bucket)
+
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict()
-        }, os.path.join(
-            "models", args.name, f"ckpt.pt"))
+        }, f'/gcs/{args.result_bucket}/ckpt.pt')
 
 
 def launch():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--epochs", default=200)
-    parser.add_argument("-bs", "--batch-size", default=1)
-    parser.add_argument("-is", "--image-size", default=(128, 128))
-    parser.add_argument("-lr", "--learning-rate", default=3e-4)
+    parser.add_argument("-e", "--epochs", default=100)
+    parser.add_argument("-bs", "--batch_size", default=5)
+    parser.add_argument("-is", "--image_size", default=(64, 256))
+    parser.add_argument("-lr", "--learning_rate", default=3e-4)
     parser.add_argument("-d", "--device", default="cuda")
-    parser.add_argument("-ds", "--dataset", default="C:/Users/student-isave/Documents/Diffusion-Spectrograms/data/13_01_2023_14_11_25.npy")
-    parser.add_argument("-n", "--name", default="DDPM_Unconditional128x")
+    parser.add_argument("-ds", "--dataset",
+                        default='data256_test.npy')
+    parser.add_argument("-bn", "--bucket_name",
+                        default='diffusion-project-data')
+    parser.add_argument("-rb", "--result_bucket",
+                        default='diffusion-project-results-na')
+    parser.add_argument("-n", "--name", default="DDPM_Unconditional256x")
     args = parser.parse_args()
+
+    print(f"Received args: {args}")
 
     train(args)
 
 
 if __name__ == '__main__':
     launch()
-    # device = "cuda"
-    # model = UNet().to(device)
-    # ckpt = torch.load("./working/orig/ckpt.pt")
-    # model.load_state_dict(ckpt)
-    # diffusion = Diffusion(img_size=64, device=device)
-    # x = diffusion.sample(model, 8)
-    # print(x.shape)
-    # plt.figure(figsize=(32, 32))
-    # plt.imshow(torch.cat([
-    #     torch.cat([i for i in x.cpu()], dim=-1),
-    # ], dim=-2).permute(1, 2, 0).cpu())
-    # plt.show()

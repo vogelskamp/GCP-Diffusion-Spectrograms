@@ -12,6 +12,14 @@ COPY [ "./requirements.txt", "./requirements.txt" ]
 
 RUN pip3 install --no-cache-dir -r ./requirements.txt
 
+RUN pip3 install --no-cache-dir --upgrade google-cloud google-cloud-storage
+
+COPY [ "./credentials.json", "./credentials.json" ]
+
+ENV GOOGLE_APPLICATION_CREDENTIALS ./credentials.json
+ENV GOOGLE_CLOUD_PROJECT diffusion-project
+
 COPY [ "./src", "./src" ]
+
 
 ENTRYPOINT [ "python3", "./src/ddpm.py" ]

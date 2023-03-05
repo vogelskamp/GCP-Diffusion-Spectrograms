@@ -3,3 +3,6 @@ __pycache__/
 audio/
 padded_audio/
 audio_data/
+
+commands.md
+credentials.json
