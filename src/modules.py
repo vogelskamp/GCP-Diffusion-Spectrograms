@@ -175,43 +175,29 @@ class UNet(nn.Module):
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
 
+        # encoding
         x1 = self.inc(x)
-        # print("inc")
         x2 = self.down1(x1, t)
-        # print("down1")
         x2 = self.sa1(x2)
-        # print("sa1")
         x3 = self.down2(x2, t)
-        # print("down2")
         x3 = self.sa2(x3)
-        # print("sa2")
         x4 = self.down3(x3, t)
-        # print("down3")
         x4 = self.sa3(x4)
-        # print("sa3")
 
+        # bottleneck
         x4 = self.bot1(x4)
-        # print("bot1")
         x4 = self.bot2(x4)
-        # print("bot2")
         x4 = self.bot3(x4)
-        # print("bot3")
 
+        # decoding
         x = self.up1(x4, x3, t)
-        # print("up1")
         x = self.sa4(x)
-        # print("sa4")
         x = self.up2(x, x2, t)
-        # print("up2")
         x = self.sa5(x)
-        # print("sa5")
         x = self.up3(x, x1, t)
-        # print("up3")
         x = self.sa6(x)
-        # print("sa6")
         output = self.outc(x)
 
-        # print("at least we ended up here")
         return output
 
 

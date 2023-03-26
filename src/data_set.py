@@ -1,6 +1,6 @@
 import numpy as np
-from torch.utils.data import Dataset
 from google.cloud import storage
+from torch.utils.data import Dataset
 
 
 class SpectrogramSet(Dataset):
@@ -67,7 +67,6 @@ class GCPSpectrogramSet(Dataset):
         with open('temp_file_name', 'rb') as file:
             data = np.load(file)
 
-            # data = data[0:10, :, :, :]
             print(f"Dataset shape: {data.shape}")
             return data
 
